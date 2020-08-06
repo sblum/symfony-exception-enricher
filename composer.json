@@ -2,7 +2,7 @@
     "name": "sblum/exception-enricher",
     "description": "Enriches exceptions with additional information.",
     "homepage": "http://github.com/sblum/exception-enricher",
-    "type": "library",
+    "type": "symfony-bundle",
     "license": "MIT",
     "authors": [
         {
@@ -19,6 +19,7 @@
     "require": {
         "php": ">=7.3",
         "monolog/monolog": "^1.25",
+        "symfony/config": "^4.4",
         "symfony/dependency-injection": "^4.4",
         "symfony/http-foundation": "^4.4",
         "symfony/security": "^4.4"

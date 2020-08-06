@@ -20,7 +20,7 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     /** @var UserInterface $user */
     private $user;
 
-    public function __construct(?RequestStack $requestStack, ?SessionInterface $session, ?UserInterface $user)
+    public function __construct(?RequestStack $requestStack, ?SessionInterface $session, ?UserInterface $user = null)
     {
         $this->requestStack = $requestStack;
         $this->session = $session;
