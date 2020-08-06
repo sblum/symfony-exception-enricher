@@ -1,0 +1,36 @@
+{
+    "name": "sblum/exception-enricher",
+    "description": "Enriches exceptions with additional information.",
+    "homepage": "http://github.com/sblum/exception-enricher",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Sinan Sözen",
+            "email": "sinan.soezen@sblum.de",
+            "homepage": "https://www.sblum.de"
+        }
+    ],
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "prefer-stable": true,
+    "require": {
+        "php": ">=7.3",
+        "monolog/monolog": "^1.25",
+        "symfony/http-foundation": "^4.4",
+        "symfony/security": "^4.4"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^2.16",
+        "phpunit/phpunit": "^8.5"
+    },
+    "autoload": {
+        "psr-4": {"ExceptionEnricher\\": "src/ExceptionEnricher"}
+    },
+    "autoload-dev": {
+        "psr-4": {"ExceptionEnricher\\": "tests/ExceptionEnricher"}
+    },
+    "minimum-stability": "stable"
+}

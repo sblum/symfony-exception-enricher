@@ -1,0 +1,18 @@
+language: php
+
+php:
+  - 7.3
+  - 7.4
+
+before_install:
+  - echo date.timezone = Europe/Berlin >> $INI_FILE
+  - echo memory_limit = -1 >> $INI_FILE
+  - composer self-update
+  - composer clear-cache
+
+install:
+  - composer validate --strict
+  - composer install --no-interaction --prefer-dist
+
+script:
+  - ./vendor/bin/phpunit -v
