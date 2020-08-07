@@ -20,7 +20,7 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     /** @var TokenStorageInterface $tokenStorage */
     private $tokenStorage;
 
-    public function __construct(?RequestStack $requestStack, ?SessionInterface $session, ?TokenStorageInterface $tokenStorage)
+    public function __construct(?RequestStack $requestStack = null, ?SessionInterface $session = null, ?TokenStorageInterface $tokenStorage = null)
     {
         $this->requestStack = $requestStack;
         $this->session = $session;
@@ -30,11 +30,11 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     public function __invoke(array $record)
     {
         if ($this->requestStack) {
-            if ($this->requestStack->getCurrentRequest()->getRequestUri()) {
+            if ($this->requestStack->getCurrentRequest() && $this->requestStack->getCurrentRequest()->getRequestUri()) {
                 $record['extra']['request_uri'] = \sprintf('%s %s', $this->requestStack->getCurrentRequest()->getMethod(), $this->requestStack->getCurrentRequest()->getRequestUri());
             }
 
-            if ('POST' === $this->requestStack->getCurrentRequest()->getMethod()) {
+            if ($this->requestStack->getCurrentRequest() && 'POST' === $this->requestStack->getCurrentRequest()->getMethod()) {
                 $postParams = $this->requestStack->getCurrentRequest()->request->all();
 
                 if (false === empty($postParams)) {
@@ -43,7 +43,7 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                 }
             }
 
-            if ($this->requestStack->getCurrentRequest()->headers) {
+            if ($this->requestStack->getCurrentRequest() && $this->requestStack->getCurrentRequest()->headers) {
                 $record['extra']['request_user_agent'] = $this->requestStack->getCurrentRequest()->headers->get('User-Agent');
             }
 
@@ -52,11 +52,11 @@ class ExceptionEnricherProcessor implements ProcessorInterface
             }
         }
 
-        if ($this->session) {
+        if ($this->session && $this->session->getId()) {
             $record['extra']['session_id'] = $this->session->getId();
         }
 
-        if ($this->tokenStorage) {
+        if ($this->tokenStorage && $this->tokenStorage->getToken()) {
             $record['extra']['username'] = $this->tokenStorage->getToken()->getUsername();
         }
 
