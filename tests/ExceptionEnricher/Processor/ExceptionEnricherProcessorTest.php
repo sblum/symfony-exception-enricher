@@ -11,6 +11,9 @@ use Symfony\Component\HttpFoundation\HeaderBag;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\User\User;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 class ExceptionEnricherProcessorTest extends TestCase
@@ -50,10 +53,13 @@ class ExceptionEnricherProcessorTest extends TestCase
         $session = $this->prophesize(SessionInterface::class);
         $session->getId()->willReturn('39d9f31fb12441428031e26d2f83ab6e')->shouldBeCalled();
 
-        $user = $this->prophesize(UserInterface::class);
-        $user->getUsername()->willReturn('testuser')->shouldBeCalled();
+        $token = $this->prophesize(TokenInterface::class);
+        $token->getUsername()->willReturn('testuser')->shouldBeCalled();
 
-        $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack->reveal(), $session->reveal(), $user->reveal());
+        $tokenStorage = $this->prophesize(TokenStorageInterface::class);
+        $tokenStorage->getToken()->willReturn($token->reveal())->shouldBeCalled();
+
+        $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack->reveal(), $session->reveal(), $tokenStorage->reveal());
         $record = $exceptionEnricherProcessor($this->createRecord());
 
         $this->assertArrayHasKey('request_uri', $record['extra']);

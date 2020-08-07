@@ -56,7 +56,7 @@ class ExceptionEnricherProcessor implements ProcessorInterface
             $record['extra']['session_id'] = $this->session->getId();
         }
 
-        if ($this->tokenStorage->getToken()->getUser()) {
+        if ($this->tokenStorage) {
             $record['extra']['username'] = $this->tokenStorage->getToken()->getUsername();
         }
 
