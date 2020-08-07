@@ -1,4 +1,4 @@
-# Trikoder OAuth 2 Bundle
+# sblum Exception Enricher Bundle
 
 [![Build Status](https://travis-ci.com/sblum/exception-enricher.svg?branch=master)](https://travis-ci.com/sblum/exception-enricher)
 [![Latest Stable Version](https://poser.pugx.org/sblum/exception-enricher/v/stable)](https://packagist.org/packages/sblum/exception-enricher)
