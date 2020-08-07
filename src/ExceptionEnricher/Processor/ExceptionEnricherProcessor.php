@@ -7,7 +7,7 @@ namespace ExceptionEnricher\Processor;
 use Monolog\Processor\ProcessorInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
-use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 class ExceptionEnricherProcessor implements ProcessorInterface
 {
@@ -17,14 +17,14 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     private $requestStack;
     /** @var SessionInterface $session */
     private $session;
-    /** @var UserInterface $user */
-    private $user;
+    /** @var TokenStorageInterface $tokenStorage */
+    private $tokenStorage;
 
-    public function __construct(?RequestStack $requestStack, ?SessionInterface $session, ?UserInterface $user = null)
+    public function __construct(?RequestStack $requestStack, ?SessionInterface $session, ?TokenStorageInterface $tokenStorage)
     {
         $this->requestStack = $requestStack;
         $this->session = $session;
-        $this->user = $user;
+        $this->tokenStorage = $tokenStorage;
     }
 
     public function __invoke(array $record)
@@ -56,8 +56,8 @@ class ExceptionEnricherProcessor implements ProcessorInterface
             $record['extra']['session_id'] = $this->session->getId();
         }
 
-        if ($this->user) {
-            $record['extra']['username'] = $this->user->getUsername();
+        if ($this->tokenStorage->getToken()->getUser()) {
+            $record['extra']['username'] = $this->tokenStorage->getToken()->getUsername();
         }
 
         return $record;

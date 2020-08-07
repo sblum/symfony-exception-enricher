@@ -1,6 +1,6 @@
 services:
     sblum.exception_enricher:
         class: ExceptionEnricher\Processor\ExceptionEnricherProcessor
-        arguments: ["@request_stack", "@session"]
+        arguments: ["@request_stack", "@session", "@security.token_storage"]
         tags:
             - { name: monolog.processor }
