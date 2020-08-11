@@ -30,21 +30,23 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     public function __invoke(array $record)
     {
         if ($this->requestStack) {
-            if ($this->requestStack->getCurrentRequest() && $this->requestStack->getCurrentRequest()->getRequestUri()) {
-                $record['extra']['request_uri'] = \sprintf('%s %s', $this->requestStack->getCurrentRequest()->getMethod(), $this->requestStack->getCurrentRequest()->getRequestUri());
-            }
-
-            if ($this->requestStack->getCurrentRequest() && 'POST' === $this->requestStack->getCurrentRequest()->getMethod()) {
-                $postParams = $this->requestStack->getCurrentRequest()->request->all();
-
-                if (false === empty($postParams)) {
-                    $this->postParams = \serialize($postParams);
-                    $record['extra']['request_post_data'] = $this->postParams;
+            if ($this->requestStack->getCurrentRequest()) {
+                if ($this->requestStack->getCurrentRequest()->getRequestUri()) {
+                    $record['extra']['request_uri'] = \sprintf('%s %s', $this->requestStack->getCurrentRequest()->getMethod(), $this->requestStack->getCurrentRequest()->getRequestUri());
                 }
-            }
 
-            if ($this->requestStack->getCurrentRequest() && $this->requestStack->getCurrentRequest()->headers) {
-                $record['extra']['request_user_agent'] = $this->requestStack->getCurrentRequest()->headers->get('User-Agent');
+                if ('POST' === $this->requestStack->getCurrentRequest()->getMethod()) {
+                    $postParams = $this->requestStack->getCurrentRequest()->request->all();
+
+                    if (false === empty($postParams)) {
+                        $this->postParams = \serialize($postParams);
+                        $record['extra']['request_post_data'] = $this->postParams;
+                    }
+                }
+
+                if ($this->requestStack->getCurrentRequest()->headers) {
+                    $record['extra']['request_user_agent'] = $this->requestStack->getCurrentRequest()->headers->get('User-Agent');
+                }
             }
 
             if ($this->requestStack->getMasterRequest()) {
