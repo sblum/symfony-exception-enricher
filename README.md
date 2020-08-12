@@ -19,7 +19,7 @@ Symfony bundle which enriches exceptions with some additional information like t
     composer require sblum/exception-enricher
     ```
 
-1. Enable the bundle in `config/bundles.php` by adding it to the array:
+1. If not already happened automatically, enable the bundle in `config/bundles.php` by adding it to the array:
 
     ```php
     ExceptionEnricher\ExceptionEnricherBundle::class => ['all' => true],
