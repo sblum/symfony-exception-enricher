@@ -1,4 +1,4 @@
-language: php
+colanguage: php
 
 php:
   - 7.3
