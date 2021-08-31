@@ -10,11 +10,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 
 class ExceptionEnricherProcessor implements ProcessorInterface
 {
-    /** @var string $postParams */
-    private ?string $postParams = null;
-    /** @var RequestStack $requestStack */
     private ?RequestStack $requestStack;
-    /** @var TokenStorageInterface $tokenStorage */
     private ?TokenStorageInterface $tokenStorage;
 
     public function __construct(?RequestStack $requestStack = null, ?TokenStorageInterface $tokenStorage = null)
@@ -23,7 +19,7 @@ class ExceptionEnricherProcessor implements ProcessorInterface
         $this->tokenStorage = $tokenStorage;
     }
 
-    public function __invoke(array $record)
+    public function __invoke(array $record): array
     {
         if ($this->requestStack) {
             if ($this->requestStack->getCurrentRequest()) {
@@ -35,8 +31,8 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                     $postParams = $this->requestStack->getCurrentRequest()->request->all();
 
                     if (false === empty($postParams)) {
-                        $this->postParams = \serialize($postParams);
-                        $record['extra']['request_post_data'] = $this->postParams;
+                        $postParams = \serialize($postParams);
+                        $record['extra']['request_post_data'] = $postParams;
                     }
                 }
 
