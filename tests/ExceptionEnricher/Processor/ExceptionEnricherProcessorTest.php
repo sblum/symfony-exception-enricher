@@ -21,7 +21,7 @@ class ExceptionEnricherProcessorTest extends TestCase
      */
     public function testEmptyProcessor()
     {
-        $exceptionEnricherProcessor = new ExceptionEnricherProcessor(null, null, null);
+        $exceptionEnricherProcessor = new ExceptionEnricherProcessor(null, null);
         $record = $exceptionEnricherProcessor($this->createRecord());
 
         $this->assertArrayNotHasKey('request_uri', $record['extra']);
@@ -44,12 +44,13 @@ class ExceptionEnricherProcessorTest extends TestCase
         $request->getMethod()->willReturn('GET')->shouldBeCalled();
         $request->getRequestUri()->willReturn('/testroute/')->shouldBeCalled();
 
+        $session = $this->prophesize(SessionInterface::class);
+        $session->getId()->willReturn('39d9f31fb12441428031e26d2f83ab6e')->shouldBeCalled();
+
         $requestStack = $this->prophesize(RequestStack::class);
         $requestStack->getCurrentRequest()->willReturn($request->reveal())->shouldBeCalled();
         $requestStack->getMainRequest()->willReturn($request->reveal())->shouldBeCalled();
-
-        $session = $this->prophesize(SessionInterface::class);
-        $session->getId()->willReturn('39d9f31fb12441428031e26d2f83ab6e')->shouldBeCalled();
+        $requestStack->getSession()->willReturn($session)->shouldBeCalled();
 
         $token = $this->prophesize(TokenInterface::class);
         $token->getUsername()->willReturn('testuser')->shouldBeCalled();
@@ -57,7 +58,7 @@ class ExceptionEnricherProcessorTest extends TestCase
         $tokenStorage = $this->prophesize(TokenStorageInterface::class);
         $tokenStorage->getToken()->willReturn($token->reveal())->shouldBeCalled();
 
-        $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack->reveal(), $session->reveal(), $tokenStorage->reveal());
+        $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack->reveal(), $tokenStorage->reveal());
         $record = $exceptionEnricherProcessor($this->createRecord());
 
         $this->assertArrayHasKey('request_uri', $record['extra']);
