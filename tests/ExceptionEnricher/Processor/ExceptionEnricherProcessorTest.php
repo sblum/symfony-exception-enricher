@@ -30,7 +30,7 @@ class ExceptionEnricherProcessorTest extends TestCase
         $this->assertArrayNotHasKey('request_ip', $record['extra']);
         $this->assertArrayNotHasKey('session_id', $record['extra']);
         $this->assertArrayNotHasKey('username', $record['extra']);
-        $this->assertTrue(empty($record['extra']));
+        $this->assertEmpty($record['extra']);
     }
 
     /**
