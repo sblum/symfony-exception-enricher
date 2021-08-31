@@ -49,8 +49,8 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                 }
             }
 
-            if ($this->requestStack->getMasterRequest()) {
-                $record['extra']['request_ip'] = $this->requestStack->getMasterRequest()->getClientIp();
+            if ($this->requestStack->getMainRequest()) {
+                $record['extra']['request_ip'] = $this->requestStack->getMainRequest()->getClientIp();
             }
         }
 

@@ -46,7 +46,7 @@ class ExceptionEnricherProcessorTest extends TestCase
 
         $requestStack = $this->prophesize(RequestStack::class);
         $requestStack->getCurrentRequest()->willReturn($request->reveal())->shouldBeCalled();
-        $requestStack->getMasterRequest()->willReturn($request->reveal())->shouldBeCalled();
+        $requestStack->getMainRequest()->willReturn($request->reveal())->shouldBeCalled();
 
         $session = $this->prophesize(SessionInterface::class);
         $session->getId()->willReturn('39d9f31fb12441428031e26d2f83ab6e')->shouldBeCalled();
