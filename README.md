@@ -1,6 +1,6 @@
 # sblum Exception Enricher Bundle
 
-[![Build Status](https://github.com/sblum/exception-enricher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sblum/exception-enricher/actions)
+[![Build Status](https://github.com/sblum/exception-enricher/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/sblum/exception-enricher/actions)
 [![Latest Stable Version](https://poser.pugx.org/sblum/exception-enricher/v/stable)](https://packagist.org/packages/sblum/exception-enricher)
 [![License](https://poser.pugx.org/sblum/exception-enricher/license)](https://packagist.org/packages/sblum/exception-enricher)
 

@@ -1,9 +1,9 @@
-name: build
+name: GitHub Actions
 
 on:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   phpunit:
