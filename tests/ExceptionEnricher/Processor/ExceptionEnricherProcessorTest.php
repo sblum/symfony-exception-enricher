@@ -43,6 +43,7 @@ class ExceptionEnricherProcessorTest extends TestCase
         $request->getClientIp()->willReturn('127.0.0.1')->shouldBeCalled();
         $request->getMethod()->willReturn('GET')->shouldBeCalled();
         $request->getRequestUri()->willReturn('/testroute/')->shouldBeCalled();
+        $request->hasSession()->willReturn(true)->shouldBeCalled();
 
         $session = $this->prophesize(SessionInterface::class);
         $session->getId()->willReturn('39d9f31fb12441428031e26d2f83ab6e')->shouldBeCalled();
@@ -75,12 +76,12 @@ class ExceptionEnricherProcessorTest extends TestCase
         $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record['extra']['session_id']);
     }
 
-    private function createRecord($level = Logger::ERROR, $message = 'An Exception has been encountered.'): array
+    private function createRecord(): array
     {
         return [
-            'message' => $message,
-            'level' => $level,
-            'level_name' => Logger::getLevelName($level),
+            'message' => 'An Exception has been encountered.',
+            'level' => Logger::ERROR,
+            'level_name' => Logger::getLevelName(Logger::ERROR),
             'channel' => 'test',
             'datetime' => new DateTimeImmutable('now'),
             'extra' => [],
