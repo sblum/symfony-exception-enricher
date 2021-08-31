@@ -6,28 +6,20 @@ namespace ExceptionEnricher\Processor;
 
 use Monolog\Processor\ProcessorInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 class ExceptionEnricherProcessor implements ProcessorInterface
 {
-    /** @var string $postParams */
-    private $postParams = null;
-    /** @var RequestStack $requestStack */
-    private $requestStack;
-    /** @var SessionInterface $session */
-    private $session;
-    /** @var TokenStorageInterface $tokenStorage */
-    private $tokenStorage;
+    private ?RequestStack $requestStack;
+    private ?TokenStorageInterface $tokenStorage;
 
-    public function __construct(?RequestStack $requestStack = null, ?SessionInterface $session = null, ?TokenStorageInterface $tokenStorage = null)
+    public function __construct(?RequestStack $requestStack = null, ?TokenStorageInterface $tokenStorage = null)
     {
         $this->requestStack = $requestStack;
-        $this->session = $session;
         $this->tokenStorage = $tokenStorage;
     }
 
-    public function __invoke(array $record)
+    public function __invoke(array $record): array
     {
         if ($this->requestStack) {
             if ($this->requestStack->getCurrentRequest()) {
@@ -39,8 +31,8 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                     $postParams = $this->requestStack->getCurrentRequest()->request->all();
 
                     if (false === empty($postParams)) {
-                        $this->postParams = \serialize($postParams);
-                        $record['extra']['request_post_data'] = $this->postParams;
+                        $postParams = \serialize($postParams);
+                        $record['extra']['request_post_data'] = $postParams;
                     }
                 }
 
@@ -49,17 +41,17 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                 }
             }
 
-            if ($this->requestStack->getMasterRequest()) {
-                $record['extra']['request_ip'] = $this->requestStack->getMasterRequest()->getClientIp();
+            if ($this->requestStack->getMainRequest()) {
+                $record['extra']['request_ip'] = $this->requestStack->getMainRequest()->getClientIp();
+            }
+
+            if ($this->requestStack->getSession() && $this->requestStack->getSession()->getId()) {
+                $record['extra']['session_id'] = $this->requestStack->getSession()->getId();
             }
         }
 
-        if ($this->session && $this->session->getId()) {
-            $record['extra']['session_id'] = $this->session->getId();
-        }
-
         if ($this->tokenStorage && $this->tokenStorage->getToken()) {
-            $record['extra']['username'] = $this->tokenStorage->getToken()->getUsername();
+            $record['extra']['username'] = $this->tokenStorage->getToken()->getUserIdentifier();
         }
 
         return $record;
