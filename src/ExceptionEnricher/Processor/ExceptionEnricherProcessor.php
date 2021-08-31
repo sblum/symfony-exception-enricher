@@ -39,14 +39,14 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                 if ($this->requestStack->getCurrentRequest()->headers) {
                     $record['extra']['request_user_agent'] = $this->requestStack->getCurrentRequest()->headers->get('User-Agent');
                 }
+
+                if ($this->requestStack->getCurrentRequest()->hasSession() && $this->requestStack->getSession()->getId()) {
+                    $record['extra']['session_id'] = $this->requestStack->getSession()->getId();
+                }
             }
 
             if ($this->requestStack->getMainRequest()) {
                 $record['extra']['request_ip'] = $this->requestStack->getMainRequest()->getClientIp();
-            }
-
-            if ($this->requestStack->getCurrentRequest()->hasSession() && $this->requestStack->getSession()->getId()) {
-                $record['extra']['session_id'] = $this->requestStack->getSession()->getId();
             }
         }
 
