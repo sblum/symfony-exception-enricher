@@ -47,11 +47,11 @@ class ExceptionEnricherProcessor implements ProcessorInterface
 
             if ($this->requestStack->getMainRequest()) {
                 $record['extra']['request_ip'] = $this->requestStack->getMainRequest()->getClientIp();
-            }
-        }
 
-        if ($this->tokenStorage && $this->tokenStorage->getToken()) {
-            $record['extra']['username'] = $this->tokenStorage->getToken()->getUserIdentifier();
+                if ($this->tokenStorage && $this->tokenStorage->getToken()) {
+                    $record['extra']['username'] = $this->tokenStorage->getToken()->getUserIdentifier();
+                }
+            }
         }
 
         return $record;
