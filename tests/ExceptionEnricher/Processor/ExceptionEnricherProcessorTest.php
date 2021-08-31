@@ -53,7 +53,7 @@ class ExceptionEnricherProcessorTest extends TestCase
         $requestStack->getSession()->willReturn($session)->shouldBeCalled();
 
         $token = $this->prophesize(TokenInterface::class);
-        $token->getUsername()->willReturn('testuser')->shouldBeCalled();
+        $token->getUserIdentifier()->willReturn('testuser')->shouldBeCalled();
 
         $tokenStorage = $this->prophesize(TokenStorageInterface::class);
         $tokenStorage->getToken()->willReturn($token->reveal())->shouldBeCalled();

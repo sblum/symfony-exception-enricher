@@ -11,11 +11,11 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 class ExceptionEnricherProcessor implements ProcessorInterface
 {
     /** @var string $postParams */
-    private $postParams = null;
+    private ?string $postParams = null;
     /** @var RequestStack $requestStack */
-    private $requestStack;
+    private ?RequestStack $requestStack;
     /** @var TokenStorageInterface $tokenStorage */
-    private $tokenStorage;
+    private ?TokenStorageInterface $tokenStorage;
 
     public function __construct(?RequestStack $requestStack = null, ?TokenStorageInterface $tokenStorage = null)
     {
@@ -55,7 +55,7 @@ class ExceptionEnricherProcessor implements ProcessorInterface
         }
 
         if ($this->tokenStorage && $this->tokenStorage->getToken()) {
-            $record['extra']['username'] = $this->tokenStorage->getToken()->getUsername();
+            $record['extra']['username'] = $this->tokenStorage->getToken()->getUserIdentifier();
         }
 
         return $record;
