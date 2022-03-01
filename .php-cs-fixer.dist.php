@@ -1,7 +1,7 @@
 <?php
 
 $finder = PhpCsFixer\Finder::create()
-    ->exclude(['node_modules', 'var', 'vendor'])
+    ->exclude(['vendor'])
     ->in(__DIR__)
     ->ignoreDotFiles(true)
     ->ignoreVCS(true)
