@@ -9,7 +9,7 @@ Symfony bundle which enriches exceptions with some additional information like t
 ## Requirements
 
 * [PHP 7.4](http://php.net/releases/7_4_0.php) or greater
-* [Symfony 4.4](https://symfony.com/roadmap/4.4) or [Symfony 5.3](https://symfony.com/roadmap/5.3)
+* [Symfony 4.4](https://symfony.com/roadmap/4.4), [Symfony 5.4](https://symfony.com/roadmap/5.4) or [Symfony 6.0](https://symfony.com/roadmap/6.0)
 
 ## Installation
 
