@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace ExceptionEnricher\Processor;
 
 use DateTimeImmutable;
-use Monolog\Logger;
+use Monolog\Level;
+use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\HeaderBag;
 use Symfony\Component\HttpFoundation\Request;
@@ -38,28 +39,28 @@ class ExceptionEnricherProcessorTest extends TestCase
      */
     public function testFullProcessor()
     {
-        $request = $this->prophesize(Request::class);
+        $request = $this->createMock(Request::class);
         $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
-        $request->getClientIp()->willReturn('127.0.0.1')->shouldBeCalled();
-        $request->getMethod()->willReturn('GET')->shouldBeCalled();
-        $request->getRequestUri()->willReturn('/testroute/')->shouldBeCalled();
-        $request->hasSession()->willReturn(true)->shouldBeCalled();
+        $request->method('getClientIp')->willReturn('127.0.0.1');
+        $request->method('getMethod')->willReturn('GET');
+        $request->method('getRequestUri')->willReturn('/testroute/');
+        $request->method('hasSession')->willReturn(true);
 
-        $session = $this->prophesize(SessionInterface::class);
-        $session->getId()->willReturn('39d9f31fb12441428031e26d2f83ab6e')->shouldBeCalled();
+        $session = $this->createMock(SessionInterface::class);
+        $session->method('getId')->willReturn('39d9f31fb12441428031e26d2f83ab6e');
 
-        $requestStack = $this->prophesize(RequestStack::class);
-        $requestStack->getCurrentRequest()->willReturn($request->reveal())->shouldBeCalled();
-        $requestStack->getMainRequest()->willReturn($request->reveal())->shouldBeCalled();
-        $requestStack->getSession()->willReturn($session)->shouldBeCalled();
+        $requestStack = $this->createMock(RequestStack::class);
+        $requestStack->method('getCurrentRequest')->willReturn($request);
+        $requestStack->method('getMainRequest')->willReturn($request);
+        $requestStack->method('getSession')->willReturn($session);
 
-        $token = $this->prophesize(TokenInterface::class);
-        $token->getUserIdentifier()->willReturn('testuser')->shouldBeCalled();
+        $token = $this->createMock(TokenInterface::class);
+        $token->method('getUserIdentifier')->willReturn('testuser');
 
-        $tokenStorage = $this->prophesize(TokenStorageInterface::class);
-        $tokenStorage->getToken()->willReturn($token->reveal())->shouldBeCalled();
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
 
-        $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack->reveal(), $tokenStorage->reveal());
+        $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack, $tokenStorage);
         $record = $exceptionEnricherProcessor($this->createRecord());
 
         $this->assertArrayHasKey('request_uri', $record['extra']);
@@ -76,15 +77,8 @@ class ExceptionEnricherProcessorTest extends TestCase
         $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record['extra']['session_id']);
     }
 
-    private function createRecord(): array
+    private function createRecord(): LogRecord
     {
-        return [
-            'message' => 'An Exception has been encountered.',
-            'level' => Logger::ERROR,
-            'level_name' => Logger::getLevelName(Logger::ERROR),
-            'channel' => 'test',
-            'datetime' => new DateTimeImmutable('now'),
-            'extra' => [],
-        ];
+        return new LogRecord(new DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
     }
 }
