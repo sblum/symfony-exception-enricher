@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ExceptionEnricher\Processor;
 
+use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
@@ -19,8 +20,10 @@ class ExceptionEnricherProcessor implements ProcessorInterface
         $this->tokenStorage = $tokenStorage;
     }
 
-    public function __invoke(array $record): array
+    public function __invoke(LogRecord $record): array
     {
+        $record = $record->toArray();
+
         if ($this->requestStack) {
             if ($this->requestStack->getCurrentRequest()) {
                 if ($this->requestStack->getCurrentRequest()->getRequestUri()) {
