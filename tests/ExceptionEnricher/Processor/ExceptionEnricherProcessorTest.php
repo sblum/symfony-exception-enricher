@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ExceptionEnricher\Processor;
 
-use DateTimeImmutable;
 use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
@@ -20,18 +19,18 @@ class ExceptionEnricherProcessorTest extends TestCase
     /**
      * @covers \ExceptionEnricherProcessor::__invoke
      */
-    public function testEmptyProcessor()
+    public function testEmptyProcessor(): void
     {
         $exceptionEnricherProcessor = new ExceptionEnricherProcessor(null, null);
         $record = $exceptionEnricherProcessor($this->createRecord());
 
-        $this->assertArrayNotHasKey('request_uri', $record['extra']);
-        $this->assertArrayNotHasKey('request_post_data', $record['extra']);
-        $this->assertArrayNotHasKey('request_user_agent', $record['extra']);
-        $this->assertArrayNotHasKey('request_ip', $record['extra']);
-        $this->assertArrayNotHasKey('session_id', $record['extra']);
-        $this->assertArrayNotHasKey('username', $record['extra']);
-        $this->assertEmpty($record['extra']);
+        $this->assertArrayNotHasKey('request_uri', $record->extra);
+        $this->assertArrayNotHasKey('request_post_data', $record->extra);
+        $this->assertArrayNotHasKey('request_user_agent', $record->extra);
+        $this->assertArrayNotHasKey('request_ip', $record->extra);
+        $this->assertArrayNotHasKey('session_id', $record->extra);
+        $this->assertArrayNotHasKey('username', $record->extra);
+        $this->assertEmpty($record->extra);
     }
 
     /**
@@ -63,22 +62,22 @@ class ExceptionEnricherProcessorTest extends TestCase
         $exceptionEnricherProcessor = new ExceptionEnricherProcessor($requestStack, $tokenStorage);
         $record = $exceptionEnricherProcessor($this->createRecord());
 
-        $this->assertArrayHasKey('request_uri', $record['extra']);
-        $this->assertArrayHasKey('request_user_agent', $record['extra']);
-        $this->assertArrayHasKey('request_ip', $record['extra']);
-        $this->assertArrayHasKey('session_id', $record['extra']);
-        $this->assertArrayHasKey('username', $record['extra']);
-        $this->assertArrayNotHasKey('request_post_data', $record['extra']);
+        $this->assertArrayHasKey('request_uri', $record->extra);
+        $this->assertArrayHasKey('request_user_agent', $record->extra);
+        $this->assertArrayHasKey('request_ip', $record->extra);
+        $this->assertArrayHasKey('session_id', $record->extra);
+        $this->assertArrayHasKey('username', $record->extra);
+        $this->assertArrayNotHasKey('request_post_data', $record->extra);
 
-        $this->assertSame('GET /testroute/', $record['extra']['request_uri']);
-        $this->assertSame('Mozilla/5.0', $record['extra']['request_user_agent']);
-        $this->assertSame('127.0.0.1', $record['extra']['request_ip']);
-        $this->assertSame('testuser', $record['extra']['username']);
-        $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record['extra']['session_id']);
+        $this->assertSame('GET /testroute/', $record->extra['request_uri']);
+        $this->assertSame('Mozilla/5.0', $record->extra['request_user_agent']);
+        $this->assertSame('127.0.0.1', $record->extra['request_ip']);
+        $this->assertSame('testuser', $record->extra['username']);
+        $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record->extra['session_id']);
     }
 
     private function createRecord(): LogRecord
     {
-        return new LogRecord(new DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
+        return new LogRecord(new \DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
     }
 }
