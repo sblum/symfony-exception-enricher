@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ExceptionEnricher\Processor;
 
+use DateTimeImmutable;
 use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
@@ -78,6 +79,6 @@ class ExceptionEnricherProcessorTest extends TestCase
 
     private function createRecord(): LogRecord
     {
-        return new LogRecord(new \DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
+        return new LogRecord(new DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
     }
 }
