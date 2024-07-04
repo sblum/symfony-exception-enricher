@@ -1,23 +1,30 @@
 <?php
 
+use PhpCsFixer\Runner\Parallel\ParallelConfigFactory;
+
 $finder = PhpCsFixer\Finder::create()
-    ->exclude(['vendor'])
+    ->exclude(['node_modules', 'var', 'vendor'])
     ->in(__DIR__)
     ->ignoreDotFiles(true)
     ->ignoreVCS(true)
     ->files()
-    ->name('*.php')
-;
+    ->name('*.php');
 
 $config = new PhpCsFixer\Config();
 
 return $config
+    ->setParallelConfig(ParallelConfigFactory::detect())
     ->setRiskyAllowed(true)
     ->setRules([
         '@Symfony' => true,
         '@Symfony:risky' => true,
         'combine_consecutive_issets' => true,
         'combine_consecutive_unsets' => true,
+        'global_namespace_import' => [
+            'import_classes' => true,
+            'import_constants' => false,
+            'import_functions' => false,
+        ],
         'heredoc_to_nowdoc' => true,
         'increment_style' => false,
         'mb_str_functions' => true,
@@ -31,5 +38,4 @@ return $config
         'strict_comparison' => true,
         'strict_param' => true,
     ])
-    ->setFinder($finder)
-    ;
+    ->setFinder($finder);
