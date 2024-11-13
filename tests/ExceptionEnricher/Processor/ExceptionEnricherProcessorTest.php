@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace ExceptionEnricher\Processor;
 
 use DateTimeImmutable;
+use Iterator;
 use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\HeaderBag;
-use Symfony\Component\HttpFoundation\ParameterBag;
+use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -90,10 +91,10 @@ class ExceptionEnricherProcessorTest extends TestCase
         $request->method('getRequestUri')->willReturn('/testroute/');
         $request->method('hasSession')->willReturn(true);
 
-        if ($type === 'parameterBag') {
+        if ('inputBag' === $type) {
             $request->request = $data;
         } else {
-            $request->request = new ParameterBag();
+            $request->request = new InputBag();
             $request->method('getContent')->willReturn($data);
         }
 
@@ -125,19 +126,18 @@ class ExceptionEnricherProcessorTest extends TestCase
         $this->assertSame('127.0.0.1', $record->extra['request_ip']);
         $this->assertSame('testuser', $record->extra['username']);
         $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record->extra['session_id']);
-        if ($type === 'parameterBag') {
+        if ('inputBag' === $type) {
             $this->assertEquals('a:2:{s:12:"getVariable1";s:6:"value1";s:12:"getVariable2";s:6:"value2";}', $record->extra['request_post_data']);
         } else {
             $this->assertSame('{"getVariable1":"value1","getVariable2":"value2"}', $record->extra['request_post_data']);
         }
     }
 
-    public function providePostRequestData(): \Iterator
+    public function providePostRequestData(): Iterator
     {
-        yield ['parameterBag', new ParameterBag(['getVariable1' => 'value1', 'getVariable2' => 'value2'])];
+        yield ['inputBag', new InputBag(['getVariable1' => 'value1', 'getVariable2' => 'value2'])];
         yield ['content', '{"getVariable1":"value1","getVariable2":"value2"}'];
     }
-
 
     private function createRecord(): LogRecord
     {
