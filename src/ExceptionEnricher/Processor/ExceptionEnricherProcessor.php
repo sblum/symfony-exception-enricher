@@ -34,6 +34,8 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                     if (false === empty($postParams)) {
                         $postParams = \serialize($postParams);
                         $record->extra['request_post_data'] = $postParams;
+                    } elseif (!empty($this->requestStack->getCurrentRequest()->getContent())) {
+                        $record->extra['request_post_data'] = $this->requestStack->getCurrentRequest()->getContent();
                     }
                 }
 
