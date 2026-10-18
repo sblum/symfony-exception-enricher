@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace ExceptionEnricher\Processor;
 
+use JsonException;
 use Monolog\Level;
 use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
+use stdClass;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
@@ -22,6 +24,8 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     private const SECRET_KEY_PARTS = ['password', 'passwd', 'secret', 'token', 'jwt', 'authorization', 'apikey', 'api_key', 'credential'];
 
     private ?RequestStack $requestStack;
+    /** Whether the last mask() call replaced a value. */
+    private bool $maskedSecret = false;
     private ?TokenStorageInterface $tokenStorage;
 
     public function __construct(?RequestStack $requestStack = null, ?TokenStorageInterface $tokenStorage = null)
@@ -69,17 +73,30 @@ class ExceptionEnricherProcessor implements ProcessorInterface
         return $record;
     }
 
-    private function mask(array $data): array
+    /**
+     * Masks the values of secret keys, whole (also arrays and objects), and recurses into everything
+     * else. Objects stay objects, so a JSON body keeps its shape ({} stays {}).
+     */
+    private function mask(mixed $data): mixed
     {
-        foreach ($data as $key => $value) {
-            if (\is_array($value)) {
-                $data[$key] = $this->mask($value);
-            } elseif ($this->isSecret((string) $key)) {
-                $data[$key] = '***';
+        if (\is_array($data)) {
+            foreach ($data as $key => $value) {
+                $data[$key] = \is_string($key) && $this->isSecret($key) ? $this->maskedValue() : $this->mask($value);
+            }
+        } elseif ($data instanceof stdClass) {
+            foreach (\get_object_vars($data) as $key => $value) {
+                $data->{$key} = $this->isSecret((string) $key) ? $this->maskedValue() : $this->mask($value);
             }
         }
 
         return $data;
+    }
+
+    private function maskedValue(): string
+    {
+        $this->maskedSecret = true;
+
+        return '***';
     }
 
     private function isSecret(string $key): bool
@@ -94,17 +111,29 @@ class ExceptionEnricherProcessor implements ProcessorInterface
         return false;
     }
 
-    /** A JSON body with secrets is re-encoded with them masked; any other body stays as it is. */
+    /**
+     * A JSON body is logged with its secrets masked. A body that looks like JSON but can't be
+     * decoded (broken, or nested too deeply) can't be masked, so it is left out. Other bodies stay
+     * as they are.
+     */
     private function maskJson(string $content): string
     {
-        $data = \json_decode($content, true);
-        if (!\is_array($data)) {
+        // A regex, not mb_ltrim(): that one needs PHP 8.4 or a recent symfony/polyfill-mbstring.
+        if (1 !== \preg_match('/^\s*[{[]/', $content)) {
             return $content;
         }
 
+        try {
+            $data = \json_decode($content, false, 512, \JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return \sprintf('[JSON body omitted: it could not be decoded to mask secrets, %d characters]', \mb_strlen($content));
+        }
+
+        $this->maskedSecret = false;
         $masked = $this->mask($data);
 
-        return $masked === $data ? $content : (string) \json_encode($masked, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        // Without secrets the body is logged exactly as it was sent.
+        return $this->maskedSecret ? (string) \json_encode($masked, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) : $content;
     }
 
     private function truncate(string $postData): string

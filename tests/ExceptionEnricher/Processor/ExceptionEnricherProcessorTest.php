@@ -183,6 +183,32 @@ class ExceptionEnricherProcessorTest extends TestCase
         );
     }
 
+    public function testSecretKeysWithArrayValuesAreMaskedWhole(): void
+    {
+        $json = $this->createPostProcessor('content', '{"tokens":["abc","def"],"ids":[1,2]}')($this->createRecord());
+        $this->assertSame('{"tokens":"***","ids":[1,2]}', $json->extra['request_post_data']);
+
+        $form = $this->createPostProcessor('form', ['token' => ['abc', 'def'], 'ids' => ['1', '2']])($this->createRecord());
+        $this->assertSame(\serialize(['token' => '***', 'ids' => ['1', '2']]), $form->extra['request_post_data']);
+    }
+
+    public function testJsonThatCannotBeDecodedIsOmitted(): void
+    {
+        $tooDeep = '{"password":"geheim","data":'.\str_repeat('[', 600).\str_repeat(']', 600).'}';
+        $deep = $this->createPostProcessor('content', $tooDeep)($this->createRecord());
+        $this->assertSame(\sprintf('[JSON body omitted: it could not be decoded to mask secrets, %d characters]', \mb_strlen($tooDeep)), $deep->extra['request_post_data']);
+
+        $broken = $this->createPostProcessor('content', '{"password":"geheim",')($this->createRecord());
+        $this->assertStringNotContainsString('geheim', $broken->extra['request_post_data']);
+    }
+
+    public function testMaskingKeepsEmptyObjectsAndArrays(): void
+    {
+        $record = $this->createPostProcessor('content', '{"password":"x","metadata":{},"list":[],"nested":{"inner":{}}}')($this->createRecord());
+
+        $this->assertSame('{"password":"***","metadata":{},"list":[],"nested":{"inner":{}}}', $record->extra['request_post_data']);
+    }
+
     private function createPostProcessor(string $type, $data): ExceptionEnricherProcessor
     {
         $request = 'form' === $type ? $this->createRequest('POST', $data) : $this->createRequest('POST', [], $data);
