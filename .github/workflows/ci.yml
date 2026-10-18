@@ -3,43 +3,58 @@ name: GitHub Actions
 on:
   pull_request:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   phpunit:
-    name: PHPUnit / php ${{ matrix.php-version }}
+    name: PHPUnit / php ${{ matrix.php-version }} / ${{ matrix.dependencies }}
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
-        php-version: [ '8.2' ]
+        # A library has no lock file: highest is what an application gets on that PHP version
+        # (Symfony 7.4 on PHP 8.3, Symfony 8.1 on PHP 8.4), lowest the oldest supported (Symfony 6.4).
+        php-version: [ '8.3', '8.4' ]
+        dependencies: [ 'highest' ]
+        include:
+          # Symfony 6.4.0 itself triggers deprecations (e.g. ContainerAwareTrait in its Bundle
+          # class); only those indirect ones are tolerated there.
+          - php-version: '8.3'
+            dependencies: 'lowest'
+            deprecations: 'max[indirect]=999999'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2.3.3
+        uses: actions/checkout@v7
 
       - name: Setup php
-        uses: shivammathur/setup-php@2.7.0
+        uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer:v2
 
-      - name: Validate composer.json and composer.lock
+      - name: Validate composer.json
         run: composer validate --strict
 
       - name: Get composer cache dir
         id: composer-cache
-        run: echo "::set-output name=dir::$(composer config cache-files-dir)"
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer
-        uses: actions/cache@v2
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
+          key: ${{ runner.os }}-php${{ matrix.php-version }}-${{ matrix.dependencies }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-php${{ matrix.php-version }}-${{ matrix.dependencies }}-composer-
 
-      - name: Install composer dependencies
-        run: composer install --quiet --no-interaction --prefer-dist --no-progress
+      - name: Install dependencies
+        run: composer update --quiet --no-interaction --prefer-dist --no-progress --prefer-stable ${{ matrix.dependencies == 'lowest' && '--prefer-lowest' || '' }}
+
+      - name: Show Symfony version
+        run: composer show symfony/dependency-injection | grep -E '^versions'
 
       - name: Run tests
         run: vendor/bin/phpunit -v
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: ${{ matrix.deprecations }}

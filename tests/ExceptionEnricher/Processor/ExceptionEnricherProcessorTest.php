@@ -9,8 +9,7 @@ use Iterator;
 use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\HttpFoundation\HeaderBag;
-use Symfony\Component\HttpFoundation\InputBag;
+use ReflectionProperty;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -41,15 +40,11 @@ class ExceptionEnricherProcessorTest extends TestCase
      */
     public function testFullProcessorWithGetRequest(): void
     {
-        $request = $this->createMock(Request::class);
-        $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
-        $request->method('getClientIp')->willReturn('127.0.0.1');
-        $request->method('getMethod')->willReturn('GET');
-        $request->method('getRequestUri')->willReturn('/testroute/');
-        $request->method('hasSession')->willReturn(true);
+        $request = $this->createRequest('GET');
 
         $session = $this->createMock(SessionInterface::class);
         $session->method('getId')->willReturn('39d9f31fb12441428031e26d2f83ab6e');
+        $request->setSession($session);
 
         $requestStack = $this->createMock(RequestStack::class);
         $requestStack->method('getCurrentRequest')->willReturn($request);
@@ -84,22 +79,11 @@ class ExceptionEnricherProcessorTest extends TestCase
      */
     public function testFullProcessorWithPostRequest(string $type, $data): void
     {
-        $request = $this->createMock(Request::class);
-        $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
-        $request->method('getClientIp')->willReturn('127.0.0.1');
-        $request->method('getMethod')->willReturn('POST');
-        $request->method('getRequestUri')->willReturn('/testroute/');
-        $request->method('hasSession')->willReturn(true);
-
-        if ('inputBag' === $type) {
-            $request->request = $data;
-        } else {
-            $request->request = new InputBag();
-            $request->method('getContent')->willReturn($data);
-        }
+        $request = 'form' === $type ? $this->createRequest('POST', $data) : $this->createRequest('POST', [], $data);
 
         $session = $this->createMock(SessionInterface::class);
         $session->method('getId')->willReturn('39d9f31fb12441428031e26d2f83ab6e');
+        $request->setSession($session);
 
         $requestStack = $this->createMock(RequestStack::class);
         $requestStack->method('getCurrentRequest')->willReturn($request);
@@ -126,7 +110,7 @@ class ExceptionEnricherProcessorTest extends TestCase
         $this->assertSame('127.0.0.1', $record->extra['request_ip']);
         $this->assertSame('testuser', $record->extra['username']);
         $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record->extra['session_id']);
-        if ('inputBag' === $type) {
+        if ('form' === $type) {
             $this->assertEquals('a:2:{s:12:"getVariable1";s:6:"value1";s:12:"getVariable2";s:6:"value2";}', $record->extra['request_post_data']);
         } else {
             $this->assertSame('{"getVariable1":"value1","getVariable2":"value2"}', $record->extra['request_post_data']);
@@ -135,12 +119,196 @@ class ExceptionEnricherProcessorTest extends TestCase
 
     public function providePostRequestData(): Iterator
     {
-        yield ['inputBag', new InputBag(['getVariable1' => 'value1', 'getVariable2' => 'value2'])];
+        yield ['form', ['getVariable1' => 'value1', 'getVariable2' => 'value2']];
         yield ['content', '{"getVariable1":"value1","getVariable2":"value2"}'];
     }
 
-    private function createRecord(): LogRecord
+    public function testPostDataOnlyForWarningsAndAbove(): void
     {
-        return new LogRecord(new DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
+        $processor = $this->createPostProcessor('content', '{"getVariable1":"value1"}');
+
+        $info = $processor($this->createRecord(Level::Info));
+        $this->assertSame('POST /testroute/', $info->extra['request_uri']);
+        $this->assertArrayNotHasKey('request_post_data', $info->extra);
+
+        $warning = $processor($this->createRecord(Level::Warning));
+        $this->assertSame('{"getVariable1":"value1"}', $warning->extra['request_post_data']);
+    }
+
+    public function testLargeJsonBodyIsTruncated(): void
+    {
+        $content = \json_encode(['payload' => ['id' => 'b41b80d2', 'content' => \str_repeat('A', 7 * 1024 * 1024)]]);
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $postData = $record->extra['request_post_data'];
+        $this->assertLessThan(2100, \mb_strlen($postData));
+        $this->assertStringStartsWith('{"payload":{"id":"b41b80d2","content":"AAAA', $postData);
+        $this->assertStringEndsWith(\sprintf('… [truncated, %d characters]', \mb_strlen($content)), $postData);
+    }
+
+    public function testTruncationKeepsMultibyteCharactersWhole(): void
+    {
+        $content = \str_repeat('ä', 3000);
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(\str_repeat('ä', 2048).'… [truncated, 3000 characters]', $record->extra['request_post_data']);
+    }
+
+    public function testLargeRawBodyIsTruncated(): void
+    {
+        $content = \str_repeat('x', 100000);
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(\str_repeat('x', 2048).'… [truncated, 100000 characters]', $record->extra['request_post_data']);
+    }
+
+    public function testSecretsInJsonBodyAreMasked(): void
+    {
+        $content = '{"username":"jane","password":"geheim","payload":{"apiToken":"abc","jwt":"eyJ","nested":{"client_secret":"s3"}},"Authorization":"Bearer x"}';
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(
+            '{"username":"jane","password":"***","payload":{"apiToken":"***","jwt":"***","nested":{"client_secret":"***"}},"Authorization":"***"}',
+            $record->extra['request_post_data']
+        );
+    }
+
+    public function testSecretsInFormDataAreMasked(): void
+    {
+        $form = ['_username' => 'jane', '_password' => 'geheim', 'user' => ['plainPassword' => 'neu', 'name' => 'Jane']];
+        $record = $this->createPostProcessor('form', $form)($this->createRecord());
+
+        $this->assertSame(
+            \serialize(['_username' => 'jane', '_password' => '***', 'user' => ['plainPassword' => '***', 'name' => 'Jane']]),
+            $record->extra['request_post_data']
+        );
+    }
+
+    public function testSecretKeysWithArrayValuesAreMaskedWhole(): void
+    {
+        $json = $this->createPostProcessor('content', '{"tokens":["abc","def"],"ids":[1,2]}')($this->createRecord());
+        $this->assertSame('{"tokens":"***","ids":[1,2]}', $json->extra['request_post_data']);
+
+        $form = $this->createPostProcessor('form', ['token' => ['abc', 'def'], 'ids' => ['1', '2']])($this->createRecord());
+        $this->assertSame(\serialize(['token' => '***', 'ids' => ['1', '2']]), $form->extra['request_post_data']);
+    }
+
+    public function testJsonThatCannotBeDecodedIsOmitted(): void
+    {
+        $tooDeep = '{"password":"geheim","data":'.\str_repeat('[', 600).\str_repeat(']', 600).'}';
+        $deep = $this->createPostProcessor('content', $tooDeep)($this->createRecord());
+        $this->assertSame(\sprintf('[JSON body omitted: it could not be decoded to mask secrets, %d characters]', \mb_strlen($tooDeep)), $deep->extra['request_post_data']);
+
+        $broken = $this->createPostProcessor('content', '{"password":"geheim",')($this->createRecord());
+        $this->assertStringNotContainsString('geheim', $broken->extra['request_post_data']);
+    }
+
+    public function testMaskingKeepsEmptyObjectsAndArrays(): void
+    {
+        $record = $this->createPostProcessor('content', '{"password":"x","metadata":{},"list":[],"nested":{"inner":{}}}')($this->createRecord());
+
+        $this->assertSame('{"password":"***","metadata":{},"list":[],"nested":{"inner":{}}}', $record->extra['request_post_data']);
+    }
+
+    public function testJsonWithByteOrderMarkIsMasked(): void
+    {
+        $record = $this->createPostProcessor('content', "\u{FEFF}".'{"user":"jane","password":"geheim"}')($this->createRecord());
+
+        $this->assertSame('{"user":"jane","password":"***"}', $record->extra['request_post_data']);
+    }
+
+    public function testUrlEncodedBodyIsMasked(): void
+    {
+        $record = $this->createPostProcessor('content', 'username=jane&password=geheim&list%5B%5D=1')($this->createRecord());
+
+        $this->assertSame('username=jane&password=%2A%2A%2A&list%5B0%5D=1', $record->extra['request_post_data']);
+    }
+
+    public function testOtherBodiesWithSecretsAreOmitted(): void
+    {
+        $xml = '<auth><user>jane</user><password>geheim</password></auth>';
+        $record = $this->createPostProcessor('content', $xml)($this->createRecord());
+
+        $this->assertSame(\sprintf('[Body omitted: it may contain secrets that can\'t be masked, %d characters]', \mb_strlen($xml)), $record->extra['request_post_data']);
+    }
+
+    public function testOtherBodiesWithoutSecretsStay(): void
+    {
+        $record = $this->createPostProcessor('content', '<ping><id>42</id></ping>')($this->createRecord());
+
+        $this->assertSame('<ping><id>42</id></ping>', $record->extra['request_post_data']);
+    }
+
+    public function testSecretInsideAFormFieldNameIsMasked(): void
+    {
+        // JSON sent as application/x-www-form-urlencoded (curl -d) becomes a field name.
+        $record = $this->createPostProcessor('form', ['{"username":"jane","password":"geheim"}' => '', 'note' => 'x'])($this->createRecord());
+
+        $this->assertStringNotContainsString('geheim', $record->extra['request_post_data']);
+        $this->assertSame(\serialize(['***' => '***', 'note' => 'x']), $record->extra['request_post_data']);
+    }
+
+    public function testJsonThatCannotBeEncodedAgainIsOmitted(): void
+    {
+        $content = '{"password":"x","n":1e999}';
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(\sprintf('[JSON body omitted: it could not be decoded to mask secrets, %d characters]', \mb_strlen($content)), $record->extra['request_post_data']);
+    }
+
+    public function testLargeFormDataIsTruncated(): void
+    {
+        $form = ['chunk' => \str_repeat('A', 5000)];
+        $record = $this->createPostProcessor('form', $form)($this->createRecord());
+
+        $this->assertStringEndsWith(\sprintf('… [truncated, %d characters]', \mb_strlen(\serialize($form))), $record->extra['request_post_data']);
+        $this->assertLessThan(2100, \mb_strlen($record->extra['request_post_data']));
+    }
+
+    public function testSecretFreeJsonStaysExactAfterAMaskedRecord(): void
+    {
+        $requestStack = $this->createMock(RequestStack::class);
+        $requestStack->method('getCurrentRequest')->willReturnOnConsecutiveCalls(
+            ...\array_fill(0, 20, $this->createRequest('POST', ['password' => 'x']))
+        );
+        $processor = new ExceptionEnricherProcessor($requestStack, null);
+        $processor($this->createRecord());
+
+        // The same service instance handles the next request; its JSON has no secrets.
+        $json = '{ "a" : 1 }';
+        $next = $this->createPostProcessorFor($processor, $json);
+        $this->assertSame($json, $next($this->createRecord())->extra['request_post_data']);
+    }
+
+    private function createPostProcessor(string $type, $data): ExceptionEnricherProcessor
+    {
+        $request = 'form' === $type ? $this->createRequest('POST', $data) : $this->createRequest('POST', [], $data);
+
+        $requestStack = $this->createMock(RequestStack::class);
+        $requestStack->method('getCurrentRequest')->willReturn($request);
+        $requestStack->method('getMainRequest')->willReturn($request);
+
+        return new ExceptionEnricherProcessor($requestStack, null);
+    }
+
+    /** Points the processor's request stack at a new request with this JSON body. */
+    private function createPostProcessorFor(ExceptionEnricherProcessor $processor, string $content): ExceptionEnricherProcessor
+    {
+        $requestStack = $this->createMock(RequestStack::class);
+        $requestStack->method('getCurrentRequest')->willReturn($this->createRequest('POST', [], $content));
+        (new ReflectionProperty($processor, 'requestStack'))->setValue($processor, $requestStack);
+
+        return $processor;
+    }
+
+    /** A real request: Symfony 8.1 deprecates setting the properties of a mocked one. */
+    private function createRequest(string $method, array $formData = [], ?string $content = null): Request
+    {
+        return Request::create('/testroute/', $method, $formData, [], [], ['HTTP_USER_AGENT' => 'Mozilla/5.0', 'REMOTE_ADDR' => '127.0.0.1'], $content);
+    }
+
+    private function createRecord(Level $level = Level::Error): LogRecord
+    {
+        return new LogRecord(new DateTimeImmutable('now'), 'test', $level, 'An Exception has been encountered.');
     }
 }
