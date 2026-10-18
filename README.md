@@ -25,3 +25,21 @@ Symfony bundle which enriches exceptions with some additional information like t
     ```php
     ExceptionEnricher\ExceptionEnricherBundle::class => ['all' => true],
     ```
+
+## What gets logged
+
+Every log record gets these `extra` fields, as far as they are available:
+
+| Field | Content |
+|---|---|
+| `request_uri` | method and URI, e.g. `POST /api/upload` |
+| `request_user_agent` | the `User-Agent` header |
+| `request_ip` | client IP of the main request |
+| `session_id` | ID of the current session |
+| `username` | identifier of the logged-in user |
+| `request_post_data` | POST data, **only for records of level `WARNING` and above** |
+
+`request_post_data` contains the serialized form fields, or else the request body. To keep a single request from filling the log (e.g. a file upload) and to keep credentials out of it:
+
+* it is cut off after 2048 characters, with a note of the full length (`… [truncated, 7340080 characters]`)
+* values of keys containing `password`, `passwd`, `secret`, `token`, `jwt`, `authorization`, `apikey`, `api_key` or `credential` (case-insensitive, also nested, in form fields and JSON bodies) are replaced by `***`

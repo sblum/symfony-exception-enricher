@@ -139,8 +139,92 @@ class ExceptionEnricherProcessorTest extends TestCase
         yield ['content', '{"getVariable1":"value1","getVariable2":"value2"}'];
     }
 
-    private function createRecord(): LogRecord
+    public function testPostDataOnlyForWarningsAndAbove(): void
     {
-        return new LogRecord(new DateTimeImmutable('now'), 'test', Level::Error, 'An Exception has been encountered.');
+        $processor = $this->createPostProcessor('content', '{"getVariable1":"value1"}');
+
+        $info = $processor($this->createRecord(Level::Info));
+        $this->assertSame('POST /testroute/', $info->extra['request_uri']);
+        $this->assertArrayNotHasKey('request_post_data', $info->extra);
+
+        $warning = $processor($this->createRecord(Level::Warning));
+        $this->assertSame('{"getVariable1":"value1"}', $warning->extra['request_post_data']);
+    }
+
+    public function testLargeJsonBodyIsTruncated(): void
+    {
+        $content = \json_encode(['payload' => ['id' => 'b41b80d2', 'content' => \str_repeat('A', 7 * 1024 * 1024)]]);
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $postData = $record->extra['request_post_data'];
+        $this->assertLessThan(2100, \mb_strlen($postData));
+        $this->assertStringStartsWith('{"payload":{"id":"b41b80d2","content":"AAAA', $postData);
+        $this->assertStringEndsWith(\sprintf('… [truncated, %d characters]', \mb_strlen($content)), $postData);
+    }
+
+    public function testTruncationKeepsMultibyteCharactersWhole(): void
+    {
+        $content = \str_repeat('ä', 3000);
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(\str_repeat('ä', 2048).'… [truncated, 3000 characters]', $record->extra['request_post_data']);
+    }
+
+    public function testLargeRawBodyIsTruncated(): void
+    {
+        $content = \str_repeat('x', 100000);
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(\str_repeat('x', 2048).'… [truncated, 100000 characters]', $record->extra['request_post_data']);
+    }
+
+    public function testSecretsInJsonBodyAreMasked(): void
+    {
+        $content = '{"username":"jane","password":"geheim","payload":{"apiToken":"abc","jwt":"eyJ","nested":{"client_secret":"s3"}},"Authorization":"Bearer x"}';
+        $record = $this->createPostProcessor('content', $content)($this->createRecord());
+
+        $this->assertSame(
+            '{"username":"jane","password":"***","payload":{"apiToken":"***","jwt":"***","nested":{"client_secret":"***"}},"Authorization":"***"}',
+            $record->extra['request_post_data']
+        );
+    }
+
+    public function testSecretsInFormDataAreMasked(): void
+    {
+        $form = new InputBag(['_username' => 'jane', '_password' => 'geheim', 'user' => ['plainPassword' => 'neu', 'name' => 'Jane']]);
+        $record = $this->createPostProcessor('inputBag', $form)($this->createRecord());
+
+        $this->assertSame(
+            \serialize(['_username' => 'jane', '_password' => '***', 'user' => ['plainPassword' => '***', 'name' => 'Jane']]),
+            $record->extra['request_post_data']
+        );
+    }
+
+    private function createPostProcessor(string $type, $data): ExceptionEnricherProcessor
+    {
+        $request = $this->createMock(Request::class);
+        $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
+        $request->method('getClientIp')->willReturn('127.0.0.1');
+        $request->method('getMethod')->willReturn('POST');
+        $request->method('getRequestUri')->willReturn('/testroute/');
+        $request->method('hasSession')->willReturn(false);
+
+        if ('inputBag' === $type) {
+            $request->request = $data;
+        } else {
+            $request->request = new InputBag();
+            $request->method('getContent')->willReturn($data);
+        }
+
+        $requestStack = $this->createMock(RequestStack::class);
+        $requestStack->method('getCurrentRequest')->willReturn($request);
+        $requestStack->method('getMainRequest')->willReturn($request);
+
+        return new ExceptionEnricherProcessor($requestStack, null);
+    }
+
+    private function createRecord(Level $level = Level::Error): LogRecord
+    {
+        return new LogRecord(new DateTimeImmutable('now'), 'test', $level, 'An Exception has been encountered.');
     }
 }

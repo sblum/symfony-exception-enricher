@@ -1,5 +1,7 @@
 | Version | Date       | Comment                                            |
 |---------|------------|----------------------------------------------------|
+| 2.2.0   | 2026-10-18 | POST data only for warnings and above, cut off after 2048 characters, secrets masked |
+| 2.1.1   | 2024-11-13 | Always add POST data (form fields or request body) |
 | 2.1.0   | 2024-07-04 | Added compatibility with Symfony 7                 |
 | 2.0.0   | 2022-09-07 | Updated Monolog to version 3 (BC break)            |
 | 1.3.0   | 2022-03-01 | Updates dependencies and possible Symfony versions |
