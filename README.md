@@ -42,4 +42,5 @@ Every log record gets these `extra` fields, as far as they are available:
 `request_post_data` contains the serialized form fields, or else the request body. To keep a single request from filling the log (e.g. a file upload) and to keep credentials out of it:
 
 * it is cut off after 2048 characters, with a note of the full length (`… [truncated, 7340080 characters]`)
-* values of keys containing `password`, `passwd`, `secret`, `token`, `jwt`, `authorization`, `apikey`, `api_key` or `credential` (case-insensitive, also nested, in form fields and JSON bodies) are replaced by `***`
+* values of keys containing `password`, `passwd`, `secret`, `token`, `jwt`, `authorization`, `apikey`, `api_key` or `credential` (case-insensitive, also nested, in form fields and JSON bodies) are replaced by `***`; such a value is replaced as a whole, also when it is a list or an object
+* a body that looks like JSON but can't be decoded (broken, or nested too deeply) can't be masked, so it is left out: `[JSON body omitted: it could not be decoded to mask secrets, N characters]`
