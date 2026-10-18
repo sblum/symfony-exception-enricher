@@ -8,8 +8,8 @@ Symfony bundle which enriches exceptions with some additional information like t
 
 ## Requirements
 
-* [PHP 8.1](http://php.net/releases/8_1_0.php) or greater
-* [Symfony 6.0](https://symfony.com/roadmap/6.0)
+* [PHP 8.3](https://www.php.net/releases/8.3/) or greater
+* Symfony 6, 7 or 8 (Symfony 8 needs PHP 8.4)
 * [Monolog](https://packagist.org/packages/monolog/monolog) v2 for version 1.x, v3 for version 2.x
 
 ## Installation

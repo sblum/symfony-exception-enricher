@@ -7,19 +7,25 @@ on:
 
 jobs:
   phpunit:
-    name: PHPUnit / php ${{ matrix.php-version }}
+    name: PHPUnit / php ${{ matrix.php-version }} / ${{ matrix.dependencies }}
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
-        php-version: [ '8.2' ]
+        php-version: [ '8.3', '8.4' ]
+        dependencies: [ 'locked' ]
+        include:
+          # The lock file pins Symfony 7; this job installs the newest versions (Symfony 8).
+          - php-version: '8.4'
+            dependencies: 'highest'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2.3.3
+        uses: actions/checkout@v4
 
       - name: Setup php
-        uses: shivammathur/setup-php@2.7.0
+        uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer:v2
@@ -29,17 +35,25 @@ jobs:
 
       - name: Get composer cache dir
         id: composer-cache
-        run: echo "::set-output name=dir::$(composer config cache-files-dir)"
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
+          key: ${{ runner.os }}-php${{ matrix.php-version }}-${{ matrix.dependencies }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-php${{ matrix.php-version }}-${{ matrix.dependencies }}-composer-
 
-      - name: Install composer dependencies
+      - name: Install locked dependencies
+        if: matrix.dependencies == 'locked'
         run: composer install --quiet --no-interaction --prefer-dist --no-progress
+
+      - name: Install highest dependencies
+        if: matrix.dependencies == 'highest'
+        run: composer update --quiet --no-interaction --prefer-dist --no-progress --prefer-stable
+
+      - name: Show Symfony version
+        run: composer show symfony/dependency-injection | grep -E '^versions'
 
       - name: Run tests
         run: vendor/bin/phpunit -v
