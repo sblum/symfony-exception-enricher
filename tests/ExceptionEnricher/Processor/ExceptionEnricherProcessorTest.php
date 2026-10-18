@@ -9,8 +9,6 @@ use Iterator;
 use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\HttpFoundation\HeaderBag;
-use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -41,15 +39,11 @@ class ExceptionEnricherProcessorTest extends TestCase
      */
     public function testFullProcessorWithGetRequest(): void
     {
-        $request = $this->createMock(Request::class);
-        $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
-        $request->method('getClientIp')->willReturn('127.0.0.1');
-        $request->method('getMethod')->willReturn('GET');
-        $request->method('getRequestUri')->willReturn('/testroute/');
-        $request->method('hasSession')->willReturn(true);
+        $request = $this->createRequest('GET');
 
         $session = $this->createMock(SessionInterface::class);
         $session->method('getId')->willReturn('39d9f31fb12441428031e26d2f83ab6e');
+        $request->setSession($session);
 
         $requestStack = $this->createMock(RequestStack::class);
         $requestStack->method('getCurrentRequest')->willReturn($request);
@@ -84,22 +78,11 @@ class ExceptionEnricherProcessorTest extends TestCase
      */
     public function testFullProcessorWithPostRequest(string $type, $data): void
     {
-        $request = $this->createMock(Request::class);
-        $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
-        $request->method('getClientIp')->willReturn('127.0.0.1');
-        $request->method('getMethod')->willReturn('POST');
-        $request->method('getRequestUri')->willReturn('/testroute/');
-        $request->method('hasSession')->willReturn(true);
-
-        if ('inputBag' === $type) {
-            $request->request = $data;
-        } else {
-            $request->request = new InputBag();
-            $request->method('getContent')->willReturn($data);
-        }
+        $request = 'form' === $type ? $this->createRequest('POST', $data) : $this->createRequest('POST', [], $data);
 
         $session = $this->createMock(SessionInterface::class);
         $session->method('getId')->willReturn('39d9f31fb12441428031e26d2f83ab6e');
+        $request->setSession($session);
 
         $requestStack = $this->createMock(RequestStack::class);
         $requestStack->method('getCurrentRequest')->willReturn($request);
@@ -126,7 +109,7 @@ class ExceptionEnricherProcessorTest extends TestCase
         $this->assertSame('127.0.0.1', $record->extra['request_ip']);
         $this->assertSame('testuser', $record->extra['username']);
         $this->assertSame('39d9f31fb12441428031e26d2f83ab6e', $record->extra['session_id']);
-        if ('inputBag' === $type) {
+        if ('form' === $type) {
             $this->assertEquals('a:2:{s:12:"getVariable1";s:6:"value1";s:12:"getVariable2";s:6:"value2";}', $record->extra['request_post_data']);
         } else {
             $this->assertSame('{"getVariable1":"value1","getVariable2":"value2"}', $record->extra['request_post_data']);
@@ -135,7 +118,7 @@ class ExceptionEnricherProcessorTest extends TestCase
 
     public function providePostRequestData(): Iterator
     {
-        yield ['inputBag', new InputBag(['getVariable1' => 'value1', 'getVariable2' => 'value2'])];
+        yield ['form', ['getVariable1' => 'value1', 'getVariable2' => 'value2']];
         yield ['content', '{"getVariable1":"value1","getVariable2":"value2"}'];
     }
 
@@ -191,8 +174,8 @@ class ExceptionEnricherProcessorTest extends TestCase
 
     public function testSecretsInFormDataAreMasked(): void
     {
-        $form = new InputBag(['_username' => 'jane', '_password' => 'geheim', 'user' => ['plainPassword' => 'neu', 'name' => 'Jane']]);
-        $record = $this->createPostProcessor('inputBag', $form)($this->createRecord());
+        $form = ['_username' => 'jane', '_password' => 'geheim', 'user' => ['plainPassword' => 'neu', 'name' => 'Jane']];
+        $record = $this->createPostProcessor('form', $form)($this->createRecord());
 
         $this->assertSame(
             \serialize(['_username' => 'jane', '_password' => '***', 'user' => ['plainPassword' => '***', 'name' => 'Jane']]),
@@ -202,25 +185,19 @@ class ExceptionEnricherProcessorTest extends TestCase
 
     private function createPostProcessor(string $type, $data): ExceptionEnricherProcessor
     {
-        $request = $this->createMock(Request::class);
-        $request->headers = new HeaderBag(['User-Agent' => 'Mozilla/5.0']);
-        $request->method('getClientIp')->willReturn('127.0.0.1');
-        $request->method('getMethod')->willReturn('POST');
-        $request->method('getRequestUri')->willReturn('/testroute/');
-        $request->method('hasSession')->willReturn(false);
-
-        if ('inputBag' === $type) {
-            $request->request = $data;
-        } else {
-            $request->request = new InputBag();
-            $request->method('getContent')->willReturn($data);
-        }
+        $request = 'form' === $type ? $this->createRequest('POST', $data) : $this->createRequest('POST', [], $data);
 
         $requestStack = $this->createMock(RequestStack::class);
         $requestStack->method('getCurrentRequest')->willReturn($request);
         $requestStack->method('getMainRequest')->willReturn($request);
 
         return new ExceptionEnricherProcessor($requestStack, null);
+    }
+
+    /** A real request: Symfony 8.1 deprecates setting the properties of a mocked one. */
+    private function createRequest(string $method, array $formData = [], ?string $content = null): Request
+    {
+        return Request::create('/testroute/', $method, $formData, [], [], ['HTTP_USER_AGENT' => 'Mozilla/5.0', 'REMOTE_ADDR' => '127.0.0.1'], $content);
     }
 
     private function createRecord(Level $level = Level::Error): LogRecord
