@@ -1,6 +1,6 @@
 # sblum Exception Enricher Bundle
 
-[![Build Status](https://github.com/sblum/exception-enricher/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/sblum/exception-enricher/actions)
+[![Build Status](https://github.com/sblum/symfony-exception-enricher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sblum/symfony-exception-enricher/actions)
 [![Latest Stable Version](https://poser.pugx.org/sblum/exception-enricher/v/stable)](https://packagist.org/packages/sblum/exception-enricher)
 [![License](https://poser.pugx.org/sblum/exception-enricher/license)](https://packagist.org/packages/sblum/exception-enricher)
 
@@ -42,5 +42,9 @@ Every log record gets these `extra` fields, as far as they are available:
 `request_post_data` contains the serialized form fields, or else the request body. To keep a single request from filling the log (e.g. a file upload) and to keep credentials out of it:
 
 * it is cut off after 2048 characters, with a note of the full length (`… [truncated, 7340080 characters]`)
-* values of keys containing `password`, `passwd`, `secret`, `token`, `jwt`, `authorization`, `apikey`, `api_key` or `credential` (case-insensitive, also nested, in form fields and JSON bodies) are replaced by `***`; such a value is replaced as a whole, also when it is a list or an object
-* a body that looks like JSON but can't be decoded (broken, or nested too deeply) can't be masked, so it is left out: `[JSON body omitted: it could not be decoded to mask secrets, N characters]`
+* secret words are `password`, `passwd`, `secret`, `token`, `jwt`, `authorization`, `apikey`, `api_key` and `credential` (case-insensitive)
+* form fields, JSON bodies (also with a byte order mark) and urlencoded bodies are masked field by field, also nested: the value of a field whose name contains a secret word becomes `***`, as a whole, also when it is a list or an object. A field name that contains a secret word but isn't a plain name (e.g. a JSON document that form parsing turned into a field name) becomes `***`, too. JSON keeps its shape, and a body without secrets is logged exactly as sent.
+* a body that looks like JSON but can't be decoded (broken, or nested too deeply) or encoded again is left out: `[JSON body omitted: it could not be decoded to mask secrets, N characters]`
+* any other body (XML, plain text, …) can't be masked reliably: it is logged as it is when it contains no secret word, and left out otherwise: `[Body omitted: it may contain secrets that can't be masked, N characters]`
+
+Query strings are part of `request_uri` and are not masked; don't pass secrets in URLs.

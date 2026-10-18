@@ -21,11 +21,12 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     private const MAX_POST_DATA_LENGTH = 2048;
 
     /** Values of keys containing one of these (case-insensitive) are logged as "***". */
+    /** A field name like "password", "user[password]" or "client.secret"; anything else is masked whole. */
+    private const PLAIN_KEY = '/^[\w.\-\[\] ]{1,100}$/';
+
     private const SECRET_KEY_PARTS = ['password', 'passwd', 'secret', 'token', 'jwt', 'authorization', 'apikey', 'api_key', 'credential'];
 
     private ?RequestStack $requestStack;
-    /** Whether the last mask() call replaced a value. */
-    private bool $maskedSecret = false;
     private ?TokenStorageInterface $tokenStorage;
 
     public function __construct(?RequestStack $requestStack = null, ?TokenStorageInterface $tokenStorage = null)
@@ -46,9 +47,10 @@ class ExceptionEnricherProcessor implements ProcessorInterface
                     $postParams = $this->requestStack->getCurrentRequest()->request->all();
 
                     if (false === empty($postParams)) {
-                        $record->extra['request_post_data'] = $this->truncate(\serialize($this->mask($postParams)));
+                        $masked = false;
+                        $record->extra['request_post_data'] = $this->truncate(\serialize($this->mask($postParams, $masked)));
                     } elseif (!empty($this->requestStack->getCurrentRequest()->getContent())) {
-                        $record->extra['request_post_data'] = $this->truncate($this->maskJson($this->requestStack->getCurrentRequest()->getContent()));
+                        $record->extra['request_post_data'] = $this->truncate($this->maskBody($this->requestStack->getCurrentRequest()->getContent()));
                     }
                 }
 
@@ -75,35 +77,48 @@ class ExceptionEnricherProcessor implements ProcessorInterface
 
     /**
      * Masks the values of secret keys, whole (also arrays and objects), and recurses into everything
-     * else. Objects stay objects, so a JSON body keeps its shape ({} stays {}).
+     * else. A key that isn't a plain field name but contains a secret word (e.g. a JSON document
+     * that form parsing turned into a field name) is masked, too. Objects stay objects, so a JSON
+     * body keeps its shape ({} stays {}). $masked is set when anything was replaced.
      */
-    private function mask(mixed $data): mixed
+    private function mask(mixed $data, bool &$masked): mixed
     {
         if (\is_array($data)) {
+            $result = [];
             foreach ($data as $key => $value) {
-                $data[$key] = \is_string($key) && $this->isSecret($key) ? $this->maskedValue() : $this->mask($value);
+                if (\is_string($key) && $this->isSecret($key)) {
+                    $masked = true;
+                    $result[1 === \preg_match(self::PLAIN_KEY, $key) ? $key : '***'] = '***';
+                } else {
+                    $result[$key] = $this->mask($value, $masked);
+                }
             }
-        } elseif ($data instanceof stdClass) {
+
+            return $result;
+        }
+
+        if ($data instanceof stdClass) {
+            $result = new stdClass();
             foreach (\get_object_vars($data) as $key => $value) {
-                $data->{$key} = $this->isSecret((string) $key) ? $this->maskedValue() : $this->mask($value);
+                if ($this->isSecret((string) $key)) {
+                    $masked = true;
+                    $result->{1 === \preg_match(self::PLAIN_KEY, (string) $key) ? $key : '***'} = '***';
+                } else {
+                    $result->{$key} = $this->mask($value, $masked);
+                }
             }
+
+            return $result;
         }
 
         return $data;
     }
 
-    private function maskedValue(): string
+    private function isSecret(string $text): bool
     {
-        $this->maskedSecret = true;
-
-        return '***';
-    }
-
-    private function isSecret(string $key): bool
-    {
-        $key = \mb_strtolower($key);
+        $text = \mb_strtolower($text);
         foreach (self::SECRET_KEY_PARTS as $part) {
-            if (\str_contains($key, $part)) {
+            if (\str_contains($text, $part)) {
                 return true;
             }
         }
@@ -112,28 +127,50 @@ class ExceptionEnricherProcessor implements ProcessorInterface
     }
 
     /**
-     * A JSON body is logged with its secrets masked. A body that looks like JSON but can't be
-     * decoded (broken, or nested too deeply) can't be masked, so it is left out. Other bodies stay
-     * as they are.
+     * The request body with its secrets masked: JSON and urlencoded bodies are masked field by
+     * field. Any other body (XML, text, …) can't be masked reliably, so it is left out when it
+     * contains one of the secret words.
      */
-    private function maskJson(string $content): string
+    private function maskBody(string $content): string
     {
-        // A regex, not mb_ltrim(): that one needs PHP 8.4 or a recent symfony/polyfill-mbstring.
-        if (1 !== \preg_match('/^\s*[{[]/', $content)) {
-            return $content;
+        // A byte order mark would hide a JSON body from the check below.
+        $body = \str_starts_with($content, "\u{FEFF}") ? \mb_substr($content, 1) : $content;
+
+        if (1 === \preg_match('/^\s*[{[]/', $body)) {
+            return $this->maskJson($body, $content);
         }
+
+        if (1 === \preg_match('/^[^\s=&]+=\S*$/', $body)) {
+            \parse_str($body, $params);
+            $masked = false;
+            $params = $this->mask($params, $masked);
+
+            return $masked ? \http_build_query($params) : $content;
+        }
+
+        if ($this->isSecret($body)) {
+            return \sprintf('[Body omitted: it may contain secrets that can\'t be masked, %d characters]', \mb_strlen($content));
+        }
+
+        return $content;
+    }
+
+    /**
+     * A JSON body that can't be decoded (broken, nested too deeply) or encoded again can't be
+     * masked, so it is left out. Without secrets, the body is logged exactly as it was sent.
+     */
+    private function maskJson(string $json, string $content): string
+    {
+        $omitted = \sprintf('[JSON body omitted: it could not be decoded to mask secrets, %d characters]', \mb_strlen($content));
 
         try {
-            $data = \json_decode($content, false, 512, \JSON_THROW_ON_ERROR);
+            $masked = false;
+            $data = $this->mask(\json_decode($json, false, 512, \JSON_THROW_ON_ERROR), $masked);
+
+            return $masked ? \json_encode($data, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) : $content;
         } catch (JsonException) {
-            return \sprintf('[JSON body omitted: it could not be decoded to mask secrets, %d characters]', \mb_strlen($content));
+            return $omitted;
         }
-
-        $this->maskedSecret = false;
-        $masked = $this->mask($data);
-
-        // Without secrets the body is logged exactly as it was sent.
-        return $this->maskedSecret ? (string) \json_encode($masked, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) : $content;
     }
 
     private function truncate(string $postData): string
